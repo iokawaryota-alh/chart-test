@@ -1,0 +1,944 @@
+﻿/* 取引所風ダークテーマ - 拡張版 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
+  background: #1a1b1e;
+  color: #e8e8e8;
+  overflow: hidden;
+}
+
+.app-container-new {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #1a1b1e;
+}
+
+/* トップヘッダー */
+.top-header {
+  background: #0f1012;
+  border-bottom: 1px solid #2a2b2e;
+  padding: 8px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 50px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #4a9eff;
+}
+
+.header-info {
+  display: flex;
+  gap: 24px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.info-label {
+  font-size: 10px;
+  color: #888;
+}
+
+.info-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e8e8e8;
+}
+
+.info-value.positive {
+  color: #26a69a;
+}
+
+.info-value.negative {
+  color: #ef5350;
+}
+
+/* 価格ティッカー */
+.price-ticker {
+  background: #0f1012;
+  border-bottom: 1px solid #2a2b2e;
+  padding: 8px 20px;
+  display: flex;
+  gap: 32px;
+  overflow-x: auto;
+}
+
+.ticker-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.pair-name {
+  font-size: 12px;
+  color: #888;
+  font-weight: 600;
+}
+
+.ticker-item .price {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e8e8e8;
+}
+
+.ticker-item .change {
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.ticker-item .change.up {
+  color: #26a69a;
+  background: rgba(38, 166, 154, 0.15);
+}
+
+.ticker-item .change.down {
+  color: #ef5350;
+  background: rgba(239, 83, 80, 0.15);
+}
+
+/* メインレイアウト */
+.main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* サイドメニュー */
+.side-menu {
+  width: 180px;
+  background: #0f1012;
+  border-right: 1px solid #2a2b2e;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-menu-header {
+  padding: 16px;
+  border-bottom: 1px solid #2a2b2e;
+}
+
+.logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: #4a9eff;
+  text-align: center;
+}
+
+.menu-item {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 3px solid transparent;
+}
+
+.menu-item:hover {
+  background: rgba(74, 158, 255, 0.1);
+}
+
+.menu-item.active {
+  background: rgba(74, 158, 255, 0.15);
+  border-left-color: #4a9eff;
+}
+
+.menu-icon {
+  font-size: 18px;
+}
+
+.menu-label {
+  font-size: 13px;
+  color: #b8b8b8;
+}
+
+.menu-item.active .menu-label {
+  color: #4a9eff;
+  font-weight: 600;
+}
+
+/* コンテンツエリア */
+.content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #1a1b1e;
+}
+
+/* チャートビュー */
+.chart-view {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.chart-main {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #2a2b2e;
+}
+
+.chart-controls {
+  padding: 12px 20px;
+  border-bottom: 1px solid #2a2b2e;
+  display: flex;
+  gap: 8px;
+  background: #0f1012;
+}
+
+.interval-btn {
+  padding: 6px 14px;
+  background: #1a1b1e;
+  border: 1px solid #3a3b3e;
+  color: #888;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.interval-btn:hover {
+  color: #e8e8e8;
+  border-color: #4a9eff;
+}
+
+.interval-btn.active {
+  background: #2a4a7c;
+  color: #4a9eff;
+  border-color: #4a9eff;
+}
+
+.chart-section-full {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chart-header {
+  padding: 12px 20px;
+  border-bottom: 1px solid #2a2b2e;
+  background: #0f1012;
+}
+
+.chart-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.currency-pair {
+  font-size: 14px;
+  font-weight: 600;
+  color: #b8b8b8;
+}
+
+.price-badge {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e8e8e8;
+}
+
+.price-change {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.price-change.up {
+  color: #26a69a;
+  background: rgba(38, 166, 154, 0.15);
+}
+
+.price-change.down {
+  color: #ef5350;
+  background: rgba(239, 83, 80, 0.15);
+}
+
+.chart-container {
+  flex: 1;
+  padding: 20px;
+  position: relative;
+}
+
+/* チャートサイドバー */
+.chart-sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* オーダーブック */
+.orderbook {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid #2a2b2e;
+  overflow: hidden;
+}
+
+.orderbook-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #2a2b2e;
+  background: #0f1012;
+}
+
+.orderbook-header h3 {
+  font-size: 12px;
+  color: #b8b8b8;
+  font-weight: 600;
+}
+
+.orderbook-content {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 11px;
+}
+
+.orders {
+  padding: 8px;
+}
+
+.order-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px;
+  font-family: "Courier New", monospace;
+}
+
+.order-row .price {
+  font-weight: 600;
+}
+
+.order-row .price.sell {
+  color: #ef5350;
+}
+
+.order-row .price.buy {
+  color: #26a69a;
+}
+
+.order-row .amount {
+  color: #888;
+}
+
+.spread {
+  padding: 8px 16px;
+  text-align: center;
+  background: rgba(74, 158, 255, 0.1);
+  border-top: 1px solid #2a2b2e;
+  border-bottom: 1px solid #2a2b2e;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.spread-label {
+  color: #888;
+}
+
+.spread-value {
+  color: #4a9eff;
+  font-weight: 600;
+}
+
+/* 最近の取引 */
+.recent-trades {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.trades-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #2a2b2e;
+  background: #0f1012;
+}
+
+.trades-header h3 {
+  font-size: 12px;
+  color: #b8b8b8;
+  font-weight: 600;
+}
+
+.trades-list {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 11px;
+}
+
+.trades-header-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 1fr;
+  padding: 8px 16px;
+  background: #0f1012;
+  color: #888;
+  font-weight: 600;
+  border-bottom: 1px solid #2a2b2e;
+  font-size: 10px;
+}
+
+.trade-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 1fr;
+  padding: 6px 16px;
+  font-family: "Courier New", monospace;
+  border-bottom: 1px solid rgba(42, 43, 46, 0.5);
+}
+
+.trade-row.buy .price {
+  color: #26a69a;
+}
+
+.trade-row.sell .price {
+  color: #ef5350;
+}
+
+.trade-row .time {
+  color: #888;
+  font-size: 10px;
+}
+
+.trade-row .amount {
+  color: #b8b8b8;
+}
+
+/* 取引ビュー */
+.trade-view {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.trade-main {
+  border-right: 1px solid #2a2b2e;
+}
+
+/* 注文パネル */
+.trading-panel {
+  background: #0f1012;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.panel-header {
+  padding: 16px;
+  border-bottom: 1px solid #2a2b2e;
+}
+
+.panel-header h3 {
+  font-size: 14px;
+  color: #e8e8e8;
+  font-weight: 600;
+}
+
+.order-type-toggle {
+  display: flex;
+  gap: 0;
+  margin: 16px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid #3a3b3e;
+  background: #1a1b1e;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.toggle-btn:first-child {
+  border-right: none;
+}
+
+.toggle-btn.active.buy {
+  background: rgba(38, 166, 154, 0.2);
+  color: #26a69a;
+  border-color: #26a69a;
+}
+
+.toggle-btn.active.sell {
+  background: rgba(239, 83, 80, 0.2);
+  color: #ef5350;
+  border-color: #ef5350;
+}
+
+.quick-amount {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.quick-btn {
+  padding: 8px;
+  background: #1a1b1e;
+  border: 1px solid #3a3b3e;
+  color: #888;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.quick-btn:hover {
+  background: #2a2b2e;
+  color: #e8e8e8;
+}
+
+.order-summary {
+  margin: 16px 0;
+  padding: 12px;
+  background: #1a1b1e;
+  border-radius: 4px;
+  border: 1px solid #2a2b2e;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 12px;
+  color: #b8b8b8;
+}
+
+.order-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 16px;
+}
+
+.order-btn.buy {
+  background: #26a69a;
+  color: white;
+}
+
+.order-btn.buy:hover {
+  background: #1f8a7d;
+}
+
+.order-btn.sell {
+  background: #ef5350;
+  color: white;
+}
+
+.order-btn.sell:hover {
+  background: #d93834;
+}
+
+/* 資産ビュー */
+.assets-view {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.assets-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.summary-card {
+  background: linear-gradient(135deg, #2a4a7c 0%, #1e3a5f 100%);
+  padding: 24px;
+  border-radius: 8px;
+  border: 1px solid #3a4a6e;
+}
+
+.summary-card h3 {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.big-amount {
+  font-size: 28px;
+  font-weight: 700;
+  color: #e8e8e8;
+  margin-bottom: 8px;
+}
+
+.sub-amount {
+  font-size: 14px;
+  color: #888;
+}
+
+/* 入金出金ビュー */
+.deposit-view,
+.withdraw-view,
+.history-view {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.deposit-view h2,
+.withdraw-view h2,
+.history-view h2 {
+  font-size: 20px;
+  margin-bottom: 24px;
+  color: #e8e8e8;
+}
+
+.wallet-address-box {
+  background: #0f1012;
+  padding: 14px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  border: 1px solid #3a3b3e;
+  color: #4a9eff;
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+/* フォーム */
+.form-container {
+  max-width: 600px;
+  margin-bottom: 32px;
+}
+
+.form-container h3 {
+  font-size: 16px;
+  margin-bottom: 16px;
+  color: #b8b8b8;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #b8b8b8;
+  font-weight: 500;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: #0f1012;
+  border: 1px solid #3a3b3e;
+  border-radius: 4px;
+  color: #e8e8e8;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4a9eff;
+}
+
+.radio-group {
+  display: flex;
+  gap: 0;
+  border: 1px solid #3a3b3e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.radio-option {
+  flex: 1;
+  padding: 10px;
+  background: #0f1012;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.radio-option:not(:last-child) {
+  border-right: 1px solid #3a3b3e;
+}
+
+.radio-option.active {
+  background: #2a4a7c;
+  color: #e8e8e8;
+}
+
+.info-rows {
+  margin: 16px 0;
+  background: #0f1012;
+  border: 1px solid #2a2b2e;
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 13px;
+  color: #b8b8b8;
+  border-bottom: 1px solid #2a2b2e;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-row.highlight {
+  color: #e8e8e8;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 14px;
+  background: #4a9eff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: #3a8eef;
+}
+
+.submit-btn:disabled {
+  background: #3a3b3e;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* テーブル */
+.table-container {
+  max-width: 900px;
+}
+
+.table-container h3 {
+  font-size: 16px;
+  margin-bottom: 16px;
+  color: #b8b8b8;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: #0f1012;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.data-table th {
+  background: #0a0b0d;
+  padding: 12px;
+  text-align: left;
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  border-bottom: 1px solid #2a2b2e;
+}
+
+.data-table td {
+  padding: 12px;
+  border-bottom: 1px solid #2a2b2e;
+}
+
+.data-table tr:hover {
+  background: rgba(74, 158, 255, 0.05);
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge.success {
+  background: rgba(38, 166, 154, 0.2);
+  color: #26a69a;
+}
+
+.badge.warning {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.badge.error {
+  background: rgba(239, 83, 80, 0.2);
+  color: #ef5350;
+}
+
+/* 売買タイプ表示 */
+.trade-type {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.trade-type.buy {
+  background: rgba(38, 166, 154, 0.15);
+  color: #26a69a;
+}
+
+.trade-type.sell {
+  background: rgba(239, 83, 80, 0.15);
+  color: #ef5350;
+}
+
+/* 入出金タイプ表示 */
+.deposit-type {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.deposit-type.deposit {
+  background: rgba(74, 158, 255, 0.15);
+  color: #4a9eff;
+}
+
+.deposit-type.withdrawal {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffc107;
+}
+
+/* 履歴コンテンツ */
+.history-content {
+  padding: 0 24px 24px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+  font-size: 14px;
+}
+
+/* 履歴ビュー */
+.history-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #2a2b2e;
+}
+
+.history-tabs .tab {
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 14px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.history-tabs .tab:hover {
+  color: #e8e8e8;
+}
+
+.history-tabs .tab.active {
+  color: #4a9eff;
+  border-bottom-color: #4a9eff;
+}
+
+/* ローディング */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error-text {
+  color: #ef5350;
+  font-size: 13px;
+}
+
+/* スクロールバーのスタイリング */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f1012;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3a3b3e;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4a4b4e;
+}
