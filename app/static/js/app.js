@@ -1,44 +1,51 @@
 ﻿const { useState, useEffect, useRef } = React;
 
 const API_BASE = "http://localhost:5000/api";
-const COINGECKO_API = "https://api.coingecko.com/api/v3";
+const BYBIT_WS = "wss://stream.bybit.com/v5/public/linear";
+const BYBIT_API = "https://api.bybit.com/v5/market";
+const USDJPY_RATE = 150; // 簡易的なUSD/JPY換算レート
 
-// CoinGecko APIからBTC価格データを取得
-async function fetchBTCPriceData(days = 1) {
+// Bybit REST APIから過去のKlineデータを取得
+async function fetchBybitKlineData(interval, limit = 200) {
   try {
+    const endTime = Date.now();
     const response = await fetch(
-      `${COINGECKO_API}/coins/bitcoin/market_chart?vs_currency=jpy&days=${days}`,
+      `${BYBIT_API}/kline?category=linear&symbol=BTCUSDT&interval=${interval}&limit=${limit}&end=${endTime}`,
     );
     const data = await response.json();
-    return data.prices || [];
+
+    if (data.retCode !== 0 || !data.result || !data.result.list) {
+      console.error("Bybit API error:", data);
+      return [];
+    }
+
+    // Bybitのデータは降順で返されるので昇順に変換
+    return data.result.list.reverse().map((item) => ({
+      time: parseInt(item[0]), // timestamp in ms
+      open: parseFloat(item[1]) * USDJPY_RATE,
+      high: parseFloat(item[2]) * USDJPY_RATE,
+      low: parseFloat(item[3]) * USDJPY_RATE,
+      close: parseFloat(item[4]) * USDJPY_RATE,
+      volume: parseFloat(item[5]),
+    }));
   } catch (error) {
-    console.error("Chart data fetch error:", error);
+    console.error("Bybit Kline fetch error:", error);
     return [];
   }
 }
 
-async function fetchBTCOhlcData(days = 1) {
-  try {
-    const response = await fetch(
-      `${COINGECKO_API}/coins/bitcoin/ohlc?vs_currency=jpy&days=${days}`,
-    );
-    const data = await response.json();
-
-    if (!Array.isArray(data)) {
-      return [];
-    }
-
-    return data.map(([timestamp, open, high, low, close]) => ({
-      time: Math.floor(timestamp / 1000),
-      open,
-      high,
-      low,
-      close,
-    }));
-  } catch (error) {
-    console.error("OHLC data fetch error:", error);
-    return [];
-  }
+// Bybit intervalマッピング (Reactコンポーネント用 -> Bybit API用)
+function getBybitInterval(interval) {
+  const intervalMap = {
+    1: "1",
+    5: "5",
+    15: "15",
+    30: "30",
+    60: "60",
+    240: "240",
+    D: "D",
+  };
+  return intervalMap[interval] || "60";
 }
 
 // 左サイドメニューコンポーネント
@@ -175,174 +182,287 @@ function RecentTrades() {
   );
 }
 
-// チャートコンポーネント
-function PriceChart({ interval, chartType = "line" }) {
-  const chartRootRef = useRef(null);
+// チャートコンポーネント - Bybit WebSocketとREST APIを使用
+function PriceChart({ interval, chartType = "candle" }) {
+  const chartRef = useRef(null);
   const chartInstance = useRef(null);
+  const wsRef = useRef(null);
+  const [klineData, setKlineData] = useState([]);
   const [currentPrice, setCurrentPrice] = useState(null);
   const [priceChange, setPriceChange] = useState(null);
+  const [wsStatus, setWsStatus] = useState("disconnected");
 
+  // 過去データを読み込み
   useEffect(() => {
     let mounted = true;
-    let detachResize = () => {};
-    let loading = false;
-    const daysMap = { "1H": 1 / 24, "1D": 1, "1W": 7, "1M": 30 };
-    const refreshIntervalMs = 5000;
 
-    const loadChartData = async () => {
-      if (!mounted || loading) {
-        return;
-      }
+    const loadHistoricalData = async () => {
+      const bybitInterval = getBybitInterval(interval);
+      const data = await fetchBybitKlineData(bybitInterval);
 
-      loading = true;
-      try {
-        const days = daysMap[interval] || 1;
-        const lw = window.LightweightCharts;
+      if (mounted && data.length > 0) {
+        setKlineData(data);
 
-        if (!chartRootRef.current || !lw || !lw.createChart) {
-          console.warn("Lightweight Charts is not available");
-          return;
-        }
-
-        if (chartInstance.current) {
-          chartInstance.current.remove();
-          chartInstance.current = null;
-        }
-
-        const chart = lw.createChart(chartRootRef.current, {
-          layout: {
-            background: { color: "#1a1b1e" },
-            textColor: "#888",
-          },
-          grid: {
-            vertLines: { color: "#2a2b2e" },
-            horzLines: { color: "#2a2b2e" },
-          },
-          rightPriceScale: {
-            borderColor: "#2a2b2e",
-          },
-          timeScale: {
-            borderColor: "#2a2b2e",
-            timeVisible: true,
-            secondsVisible: false,
-          },
-          crosshair: {
-            vertLine: { color: "#3a3b3e" },
-            horzLine: { color: "#3a3b3e" },
-          },
-        });
-
-        chartInstance.current = chart;
-
-        const resize = () => {
-          if (!chartRootRef.current || !chartInstance.current) {
-            return;
-          }
-
-          chartInstance.current.applyOptions({
-            width: chartRootRef.current.clientWidth,
-            height: chartRootRef.current.clientHeight,
-          });
-        };
-
-        resize();
-        window.addEventListener("resize", resize);
-        detachResize = () => window.removeEventListener("resize", resize);
-
-        const priceData = await fetchBTCPriceData(days);
-
-        if (!mounted || !chartInstance.current) {
-          return;
-        }
-
-        if (priceData.length > 0) {
-          const latestPrice = priceData[priceData.length - 1][1];
-          const oldPrice = priceData[0][1];
-          setCurrentPrice(latestPrice);
-          setPriceChange(
-            (((latestPrice - oldPrice) / oldPrice) * 100).toFixed(2),
-          );
-        }
-
-        if (chartType === "candle") {
-          let ohlcData = await fetchBTCOhlcData(days);
-
-          if (ohlcData.length === 0 && priceData.length > 0) {
-            ohlcData = priceData.map(([timestamp, price]) => ({
-              time: Math.floor(timestamp / 1000),
-              open: price,
-              high: price,
-              low: price,
-              close: price,
-            }));
-          }
-
-          if (ohlcData.length > 0) {
-            const candleSeries = chart.addCandlestickSeries({
-              upColor: "#26a69a",
-              downColor: "#ef5350",
-              borderVisible: false,
-              wickUpColor: "#26a69a",
-              wickDownColor: "#ef5350",
-            });
-            candleSeries.setData(ohlcData);
-          }
-        } else {
-          const lineData = priceData.map(([timestamp, price]) => ({
-            time: Math.floor(timestamp / 1000),
-            value: price,
-          }));
-
-          if (lineData.length > 0) {
-            const lineSeries = chart.addAreaSeries({
-              lineColor: "#4a9eff",
-              topColor: "rgba(74, 158, 255, 0.25)",
-              bottomColor: "rgba(74, 158, 255, 0.05)",
-              lineWidth: 2,
-            });
-            lineSeries.setData(lineData);
-          }
-        }
-
-        chart.timeScale().fitContent();
-      } finally {
-        loading = false;
+        const latestCandle = data[data.length - 1];
+        const oldestCandle = data[0];
+        setCurrentPrice(latestCandle.close);
+        setPriceChange(
+          (
+            ((latestCandle.close - oldestCandle.close) / oldestCandle.close) *
+            100
+          ).toFixed(2),
+        );
       }
     };
 
-    loadChartData();
-
-    const timerId = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadChartData();
-      }
-    }, refreshIntervalMs);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        loadChartData();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    loadHistoricalData();
 
     return () => {
       mounted = false;
-      detachResize();
-      clearInterval(timerId);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [interval]);
+
+  // WebSocket接続でリアルタイム更新
+  useEffect(() => {
+    let ws = null;
+    let reconnectTimer = null;
+    let mounted = true;
+
+    const connect = () => {
+      if (!mounted) return;
+
+      try {
+        ws = new WebSocket(BYBIT_WS);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          if (!mounted) return;
+          console.log("Bybit WebSocket connected");
+          setWsStatus("connected");
+
+          const bybitInterval = getBybitInterval(interval);
+          const subscribeMsg = {
+            op: "subscribe",
+            args: [`kline.${bybitInterval}.BTCUSDT`],
+          };
+          ws.send(JSON.stringify(subscribeMsg));
+        };
+
+        ws.onmessage = (event) => {
+          if (!mounted) return;
+
+          try {
+            const message = JSON.parse(event.data);
+
+            if (
+              message.topic &&
+              message.topic.startsWith("kline") &&
+              message.data
+            ) {
+              const klineArray = message.data;
+
+              klineArray.forEach((k) => {
+                const newCandle = {
+                  time: k.start,
+                  open: parseFloat(k.open) * USDJPY_RATE,
+                  high: parseFloat(k.high) * USDJPY_RATE,
+                  low: parseFloat(k.low) * USDJPY_RATE,
+                  close: parseFloat(k.close) * USDJPY_RATE,
+                  volume: parseFloat(k.volume),
+                  confirm: k.confirm,
+                };
+
+                setKlineData((prevData) => {
+                  const existingIndex = prevData.findIndex(
+                    (candle) => candle.time === newCandle.time,
+                  );
+
+                  if (existingIndex >= 0) {
+                    // 既存のキャンドルを更新
+                    const updated = [...prevData];
+                    updated[existingIndex] = newCandle;
+                    return updated;
+                  } else {
+                    // 新しいキャンドルを追加
+                    return [...prevData, newCandle];
+                  }
+                });
+
+                setCurrentPrice(newCandle.close);
+              });
+            }
+          } catch (error) {
+            console.error("WebSocket message parse error:", error);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error("WebSocket error:", error);
+          setWsStatus("error");
+        };
+
+        ws.onclose = () => {
+          console.log("Bybit WebSocket closed");
+          setWsStatus("disconnected");
+
+          if (mounted) {
+            // 5秒後に再接続
+            reconnectTimer = setTimeout(() => {
+              if (mounted) {
+                console.log("Reconnecting to Bybit WebSocket...");
+                connect();
+              }
+            }, 5000);
+          }
+        };
+      } catch (error) {
+        console.error("WebSocket connection error:", error);
+        setWsStatus("error");
+      }
+    };
+
+    connect();
+
+    return () => {
+      mounted = false;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+      wsRef.current = null;
+    };
+  }, [interval]);
+
+  // Chart.jsでチャートを描画
+  useEffect(() => {
+    if (!chartRef.current || klineData.length === 0) return;
+
+    const ctx = chartRef.current.getContext("2d");
+
+    if (chartInstance.current) {
+      chartInstance.current.destroy();
+    }
+
+    if (chartType === "candle") {
+      chartInstance.current = new Chart(ctx, {
+        type: "candlestick",
+        data: {
+          datasets: [
+            {
+              label: "BTC/JPY",
+              data: klineData.map((k) => ({
+                x: k.time,
+                o: k.open,
+                h: k.high,
+                l: k.low,
+                c: k.close,
+              })),
+              color: {
+                up: "#26a69a",
+                down: "#ef5350",
+                unchanged: "#999",
+              },
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              enabled: true,
+              mode: "index",
+              intersect: false,
+            },
+          },
+          scales: {
+            x: {
+              type: "time",
+              time: {
+                unit:
+                  interval === "1" || interval === "5"
+                    ? "minute"
+                    : interval === "D"
+                      ? "day"
+                      : "hour",
+              },
+              ticks: { color: "#888" },
+              grid: { color: "#2a2b2e" },
+            },
+            y: {
+              ticks: { color: "#888" },
+              grid: { color: "#2a2b2e" },
+            },
+          },
+        },
+      });
+    } else {
+      chartInstance.current = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: klineData.map((k) => k.time),
+          datasets: [
+            {
+              label: "BTC/JPY",
+              data: klineData.map((k) => k.close),
+              borderColor: "#4a9eff",
+              backgroundColor: "rgba(74, 158, 255, 0.1)",
+              fill: true,
+              tension: 0.1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+          },
+          scales: {
+            x: {
+              type: "time",
+              time: {
+                unit:
+                  interval === "1" || interval === "5"
+                    ? "minute"
+                    : interval === "D"
+                      ? "day"
+                      : "hour",
+              },
+              ticks: { color: "#888" },
+              grid: { color: "#2a2b2e" },
+            },
+            y: {
+              ticks: { color: "#888" },
+              grid: { color: "#2a2b2e" },
+            },
+          },
+        },
+      });
+    }
+
+    return () => {
       if (chartInstance.current) {
-        chartInstance.current.remove();
+        chartInstance.current.destroy();
         chartInstance.current = null;
       }
     };
-  }, [interval, chartType]);
+  }, [klineData, chartType, interval]);
 
   return (
     <div className="chart-section-full">
       <div className="chart-header">
         <div className="chart-title">
           <span className="currency-pair">BTC/JPY</span>
+          <span
+            className={`ws-status ${wsStatus}`}
+            title={`WebSocket: ${wsStatus}`}
+          >
+            ●
+          </span>
           {currentPrice && (
             <>
               <span className="price-badge">
@@ -363,46 +483,192 @@ function PriceChart({ interval, chartType = "line" }) {
         </div>
       </div>
       <div className="chart-container">
-        <div ref={chartRootRef} className="tv-chart-root"></div>
+        <canvas ref={chartRef} className="price-chart-canvas"></canvas>
       </div>
     </div>
   );
 }
 
 // 注文パネルコンポーネント
-function TradingPanel({ balance, onTrade }) {
-  const [orderType, setOrderType] = useState("buy");
+function TradingPanel({ balance, onOrderCreated }) {
+  const [orderSide, setOrderSide] = useState("buy"); // 'buy' or 'sell'
+  const [orderType, setOrderType] = useState("market"); // 'market' or 'limit'
   const [amount, setAmount] = useState("");
-  const [price, setPrice] = useState("15234567");
+  const [price, setPrice] = useState("");
+  const [currentPrice, setCurrentPrice] = useState(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // 現在価格を取得
+  useEffect(() => {
+    const fetchCurrentPrice = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/current-price`);
+        const data = await response.json();
+        setCurrentPrice(data.price);
+        if (orderType === "limit" && !price) {
+          setPrice(data.price.toString());
+        }
+      } catch (error) {
+        console.error("Failed to fetch current price:", error);
+      }
+    };
+
+    fetchCurrentPrice();
+    const interval = setInterval(fetchCurrentPrice, 10000); // 10秒ごとに更新
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Quick amount計算
+  const calculateQuickAmount = (percentage) => {
+    if (orderSide === "buy" && currentPrice && balance.JPY) {
+      const availableJpy = balance.JPY * (percentage / 100);
+      const btcAmount = (availableJpy / currentPrice) * 0.999; // 手数料考慮
+      setAmount(btcAmount.toFixed(8));
+    } else if (orderSide === "sell" && balance.BTC) {
+      const btcAmount = balance.BTC * (percentage / 100);
+      setAmount(btcAmount.toFixed(8));
+    }
+  };
+
+  // 注文実行
+  const handleSubmitOrder = async () => {
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      const orderData = {
+        side: orderSide,
+        type: orderType,
+        amount: amount,
+        price: orderType === "limit" ? price : null,
+      };
+
+      const response = await fetch(`${API_BASE}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "注文に失敗しました");
+        return;
+      }
+
+      setSuccess(data.message);
+      setAmount("");
+      if (orderType === "market") {
+        setPrice("");
+      }
+
+      // 親コンポーネントに通知
+      if (onOrderCreated) {
+        onOrderCreated(data.order);
+      }
+    } catch (error) {
+      console.error("Order submission error:", error);
+      setError("注文処理中にエラーが発生しました");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 概算金額計算
+  const calculateTotal = () => {
+    const amountFloat = parseFloat(amount) || 0;
+    const priceFloat =
+      orderType === "limit" ? parseFloat(price) || 0 : currentPrice || 0;
+    return priceFloat * amountFloat;
+  };
+
+  const calculateFee = () => {
+    return calculateTotal() * 0.001; // 0.1%
+  };
 
   return (
     <div className="trading-panel">
       <div className="panel-header">
         <h3>注文パネル</h3>
       </div>
+
+      {/* 買い・売り切替 */}
       <div className="order-type-toggle">
         <button
-          className={`toggle-btn ${orderType === "buy" ? "active buy" : ""}`}
-          onClick={() => setOrderType("buy")}
+          className={`toggle-btn ${orderSide === "buy" ? "active buy" : ""}`}
+          onClick={() => {
+            setOrderSide("buy");
+            setError("");
+            setSuccess("");
+          }}
         >
           買い
         </button>
         <button
-          className={`toggle-btn ${orderType === "sell" ? "active sell" : ""}`}
-          onClick={() => setOrderType("sell")}
+          className={`toggle-btn ${orderSide === "sell" ? "active sell" : ""}`}
+          onClick={() => {
+            setOrderSide("sell");
+            setError("");
+            setSuccess("");
+          }}
         >
           売り
         </button>
       </div>
-      <div className="form-group">
-        <label className="form-label">価格 (JPY)</label>
-        <input
-          type="text"
-          className="form-input"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-        />
+
+      {/* 成行・指値切替 */}
+      <div className="order-mode-toggle">
+        <button
+          className={`mode-btn ${orderType === "market" ? "active" : ""}`}
+          onClick={() => {
+            setOrderType("market");
+            setError("");
+          }}
+        >
+          成行
+        </button>
+        <button
+          className={`mode-btn ${orderType === "limit" ? "active" : ""}`}
+          onClick={() => {
+            setOrderType("limit");
+            if (!price && currentPrice) {
+              setPrice(currentPrice.toString());
+            }
+            setError("");
+          }}
+        >
+          指値
+        </button>
       </div>
+
+      {/* 現在価格表示 */}
+      {currentPrice && (
+        <div className="current-price-display">
+          <span className="label">現在価格:</span>
+          <span className="value">{currentPrice.toLocaleString()} JPY</span>
+        </div>
+      )}
+
+      {/* 価格入力（指値の場合のみ） */}
+      {orderType === "limit" && (
+        <div className="form-group">
+          <label className="form-label">価格 (JPY)</label>
+          <input
+            type="text"
+            className="form-input"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="15000000"
+          />
+          <div className="input-hint">現在価格の±10%以内で指定してください</div>
+        </div>
+      )}
+
+      {/* 数量入力 */}
       <div className="form-group">
         <label className="form-label">数量 (BTC)</label>
         <input
@@ -412,31 +678,66 @@ function TradingPanel({ balance, onTrade }) {
           onChange={(e) => setAmount(e.target.value)}
           placeholder="0.00000000"
         />
+        <div className="input-hint">最小: 0.0001 BTC</div>
       </div>
+
+      {/* Quick amountボタン */}
       <div className="quick-amount">
-        {["25%", "50%", "75%", "100%"].map((pct) => (
-          <button key={pct} className="quick-btn">
-            {pct}
+        {[25, 50, 75, 100].map((pct) => (
+          <button
+            key={pct}
+            className="quick-btn"
+            onClick={() => calculateQuickAmount(pct)}
+            disabled={!currentPrice}
+          >
+            {pct}%
           </button>
         ))}
       </div>
+
+      {/* 概算金額 */}
       <div className="order-summary">
         <div className="summary-row">
           <span>概算金額</span>
           <span>
-            {(parseFloat(price) * parseFloat(amount || 0)).toLocaleString(
-              "ja-JP",
-            )}{" "}
+            {calculateTotal().toLocaleString("ja-JP", {
+              maximumFractionDigits: 0,
+            })}{" "}
             JPY
           </span>
         </div>
         <div className="summary-row">
-          <span>手数料</span>
-          <span>0.00 JPY</span>
+          <span>手数料 (0.1%)</span>
+          <span>
+            {calculateFee().toLocaleString("ja-JP", {
+              maximumFractionDigits: 0,
+            })}{" "}
+            JPY
+          </span>
+        </div>
+        <div className="summary-row total">
+          <span>合計</span>
+          <span>
+            {(
+              calculateTotal() +
+              (orderSide === "buy" ? calculateFee() : -calculateFee())
+            ).toLocaleString("ja-JP", { maximumFractionDigits: 0 })}{" "}
+            JPY
+          </span>
         </div>
       </div>
-      <button className={`order-btn ${orderType}`}>
-        {orderType === "buy" ? "買い注文" : "売り注文"}
+
+      {/* エラー・成功メッセージ */}
+      {error && <div className="error-message">{error}</div>}
+      {success && <div className="success-message">{success}</div>}
+
+      {/* 注文ボタン */}
+      <button
+        className={`order-btn ${orderSide}`}
+        onClick={handleSubmitOrder}
+        disabled={loading || !amount}
+      >
+        {loading ? "処理中..." : orderSide === "buy" ? "買い注文" : "売り注文"}
       </button>
     </div>
   );
@@ -444,16 +745,18 @@ function TradingPanel({ balance, onTrade }) {
 
 function App() {
   const [activeMenu, setActiveMenu] = useState("chart");
-  const [balance, setBalance] = useState({ BTC: 1.5, ETH: 10.0 });
+  const [balance, setBalance] = useState({ BTC: 1.5, ETH: 10.0, JPY: 5000000 });
   const [deposits, setDeposits] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
-  const [chartInterval, setChartInterval] = useState("1D");
-  const [chartType, setChartType] = useState("line");
+  const [orders, setOrders] = useState([]);
+  const [chartInterval, setChartInterval] = useState("60");
+  const [chartType, setChartType] = useState("candle");
 
   useEffect(() => {
     fetchBalance();
     fetchDeposits();
     fetchWithdrawals();
+    fetchOrders();
   }, []);
 
   const fetchBalance = async () => {
@@ -483,6 +786,35 @@ function App() {
       setWithdrawals(data);
     } catch (error) {
       console.error("Failed to fetch withdrawals:", error);
+    }
+  };
+
+  const fetchOrders = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/orders?status=all`);
+      const data = await response.json();
+      setOrders(data);
+    } catch (error) {
+      console.error("Failed to fetch orders:", error);
+    }
+  };
+
+  const handleOrderCreated = (order) => {
+    setOrders([order, ...orders]);
+    fetchBalance(); // 残高更新
+  };
+
+  const handleCancelOrder = async (orderId) => {
+    try {
+      const response = await fetch(`${API_BASE}/orders/${orderId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        fetchOrders(); // 注文一覧を再取得
+      }
+    } catch (error) {
+      console.error("Failed to cancel order:", error);
     }
   };
 
@@ -554,8 +886,7 @@ function App() {
           <div className="info-item">
             <span className="info-label">純資産額</span>
             <span className="info-value">
-              {totalJpy.toLocaleString("ja-JP")} {" "}
-              JPY
+              {totalJpy.toLocaleString("ja-JP")} JPY
             </span>
           </div>
           <div className="info-item">
@@ -576,13 +907,21 @@ function App() {
               <div className="chart-main">
                 <div className="chart-controls">
                   <div className="chart-control-group">
-                    {["1H", "1D", "1W", "1M"].map((interval) => (
+                    {[
+                      { value: "1", label: "1分" },
+                      { value: "5", label: "5分" },
+                      { value: "15", label: "15分" },
+                      { value: "30", label: "30分" },
+                      { value: "60", label: "1時間" },
+                      { value: "240", label: "4時間" },
+                      { value: "D", label: "1日" },
+                    ].map((interval) => (
                       <button
-                        key={interval}
-                        className={`interval-btn ${chartInterval === interval ? "active" : ""}`}
-                        onClick={() => setChartInterval(interval)}
+                        key={interval.value}
+                        className={`interval-btn ${chartInterval === interval.value ? "active" : ""}`}
+                        onClick={() => setChartInterval(interval.value)}
                       >
-                        {interval}
+                        {interval.label}
                       </button>
                     ))}
                   </div>
@@ -591,13 +930,13 @@ function App() {
                       className={`chart-type-btn ${chartType === "line" ? "active" : ""}`}
                       onClick={() => setChartType("line")}
                     >
-                      チャート表示
+                      ライン
                     </button>
                     <button
                       className={`chart-type-btn ${chartType === "candle" ? "active" : ""}`}
                       onClick={() => setChartType("candle")}
                     >
-                      足表示
+                      キャンドル
                     </button>
                   </div>
                 </div>
@@ -615,7 +954,10 @@ function App() {
               <div className="trade-main">
                 <PriceChart interval={chartInterval} chartType={chartType} />
               </div>
-              <TradingPanel balance={balance} />
+              <TradingPanel
+                balance={balance}
+                onOrderCreated={handleOrderCreated}
+              />
             </div>
           )}
 
@@ -678,7 +1020,12 @@ function App() {
           )}
 
           {activeMenu === "history" && (
-            <HistoryView deposits={deposits} withdrawals={withdrawals} />
+            <HistoryView
+              deposits={deposits}
+              withdrawals={withdrawals}
+              orders={orders}
+              onCancelOrder={handleCancelOrder}
+            />
           )}
         </div>
       </div>
@@ -687,8 +1034,8 @@ function App() {
 }
 
 // 履歴ビューコンポーネント
-function HistoryView({ deposits, withdrawals }) {
-  const [activeHistoryTab, setActiveHistoryTab] = useState("execution");
+function HistoryView({ deposits, withdrawals, orders, onCancelOrder }) {
+  const [activeHistoryTab, setActiveHistoryTab] = useState("orders");
 
   // サンプルの約定履歴データ
   const executionHistory = [
@@ -799,14 +1146,8 @@ function HistoryView({ deposits, withdrawals }) {
       <h2>取引履歴</h2>
       <div className="history-tabs">
         <button
-          className={`tab ${activeHistoryTab === "execution" ? "active" : ""}`}
-          onClick={() => setActiveHistoryTab("execution")}
-        >
-          約定履歴
-        </button>
-        <button
-          className={`tab ${activeHistoryTab === "order" ? "active" : ""}`}
-          onClick={() => setActiveHistoryTab("order")}
+          className={`tab ${activeHistoryTab === "orders" ? "active" : ""}`}
+          onClick={() => setActiveHistoryTab("orders")}
         >
           注文履歴
         </button>
@@ -819,91 +1160,67 @@ function HistoryView({ deposits, withdrawals }) {
       </div>
 
       <div className="history-content">
-        {activeHistoryTab === "execution" && (
+        {activeHistoryTab === "orders" && (
           <div className="table-container">
-            {executionHistory.length === 0 ? (
-              <div className="empty-state">約定履歴がありません</div>
-            ) : (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>約定日時</th>
-                    <th>通貨ペア</th>
-                    <th>売買</th>
-                    <th>約定価格</th>
-                    <th>約定数量</th>
-                    <th>手数料</th>
-                    <th>約定金額</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {executionHistory.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.date}</td>
-                      <td>{item.pair}</td>
-                      <td>
-                        <span className={`trade-type ${item.type}`}>
-                          {item.type === "buy" ? "買い" : "売り"}
-                        </span>
-                      </td>
-                      <td>{item.price}</td>
-                      <td>{item.amount}</td>
-                      <td>{item.fee} JPY</td>
-                      <td>{item.total} JPY</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        {activeHistoryTab === "order" && (
-          <div className="table-container">
-            {orderHistory.length === 0 ? (
+            {orders.length === 0 ? (
               <div className="empty-state">注文履歴がありません</div>
             ) : (
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>注文日時</th>
-                    <th>通貨ペア</th>
                     <th>売買</th>
-                    <th>注文種別</th>
-                    <th>注文価格</th>
-                    <th>注文数量</th>
+                    <th>種別</th>
+                    <th>価格</th>
+                    <th>数量</th>
+                    <th>合計</th>
                     <th>ステータス</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {orderHistory.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.date}</td>
-                      <td>{item.pair}</td>
+                  {orders.map((order) => (
+                    <tr key={order.id}>
+                      <td>{order.created_at}</td>
                       <td>
-                        <span className={`trade-type ${item.type}`}>
-                          {item.type === "buy" ? "買い" : "売り"}
+                        <span className={`trade-type ${order.side}`}>
+                          {order.side === "buy" ? "買い" : "売り"}
                         </span>
                       </td>
-                      <td>{item.orderType}</td>
-                      <td>{item.price}</td>
-                      <td>{item.amount}</td>
+                      <td>
+                        <span className="order-type-badge">
+                          {order.type === "market" ? "成行" : "指値"}
+                        </span>
+                      </td>
+                      <td>{order.price.toLocaleString()} JPY</td>
+                      <td>{order.amount.toFixed(8)} BTC</td>
+                      <td>{order.total.toLocaleString()} JPY</td>
                       <td>
                         <span
                           className={`badge ${
-                            item.status === "completed"
+                            order.status === "filled"
                               ? "success"
-                              : item.status === "pending"
+                              : order.status === "open"
                                 ? "warning"
-                                : "error"
+                                : "cancelled"
                           }`}
                         >
-                          {item.status === "completed"
+                          {order.status === "filled"
                             ? "約定"
-                            : item.status === "pending"
-                              ? "注文中"
+                            : order.status === "open"
+                              ? "未約定"
                               : "キャンセル"}
                         </span>
+                      </td>
+                      <td>
+                        {order.status === "open" && (
+                          <button
+                            className="cancel-order-btn"
+                            onClick={() => onCancelOrder(order.id)}
+                          >
+                            キャンセル
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
