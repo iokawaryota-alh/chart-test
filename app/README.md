@@ -386,12 +386,23 @@ app/
 
 ### 初回のみ：セットアップ
 
-````powershell
+```powershell
 .\setup.bat
-  - 形式チェック（アドレス）
-  - 残高チェック
-  - 最小額チェック
-- 出金履歴の一覧表示
+```
+
+### アプリ起動
+
+```powershell
+.\start.bat
+```
+
+### テスト実行
+
+```powershell
+python -m pytest test/ -v
+```
+
+---
 
 ## テスト設計の演習ポイント
 
@@ -436,4 +447,4 @@ app/
   "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
   "amount": "0.5"
 }
-````
+```
