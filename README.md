@@ -8,6 +8,37 @@
 
 ---
 
+## 動作環境（最小）
+
+- Python 3.12 系
+- Flask 3.0.0
+- flask-cors 4.0.0
+
+テストを実行する場合は、以下も利用します。
+
+- pytest 7.4.3
+- pytest-playwright 0.4.3
+- playwright 1.40.0
+
+---
+
+## セットアップ（最小手順）
+
+```powershell
+# 1) 初回セットアップ
+.\setup.bat
+
+# 2) アプリ起動
+.\start.bat
+
+# 3) テスト実行（任意）
+python -m pytest test/ -v
+```
+
+アプリ起動後は、`http://localhost:5000` にアクセスしてください。
+
+---
+
 ## 最新ログ（抜粋）
 
 ### v2.1.0（2026-03-03）
