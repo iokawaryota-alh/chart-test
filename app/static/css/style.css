@@ -46,13 +46,14 @@ body {
 /* 取引モード切り替え */
 .trade-mode-switcher {
   display: flex;
+  flex-wrap: nowrap;
   gap: 4px;
   background: #1a1b1e;
   padding: 4px;
   border-radius: 6px;
 }
 
-.mode-btn {
+.trade-mode-switcher .mode-btn {
   padding: 6px 16px;
   border: none;
   background: transparent;
@@ -62,14 +63,16 @@ body {
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
-.mode-btn:hover {
+.trade-mode-switcher .mode-btn:hover {
   color: #e8e8e8;
   background: rgba(255, 255, 255, 0.05);
 }
 
-.mode-btn.active {
+.trade-mode-switcher .mode-btn.active {
   background: #3498db;
   color: white;
 }
@@ -401,6 +404,28 @@ body {
   color: #b8b8b8;
 }
 
+.chart-symbol-select {
+  background: #1a1b1e;
+  border: 1px solid #3a3b3e;
+  color: #e8e8e8;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+}
+
+.chart-symbol-select:hover,
+.chart-symbol-select:focus {
+  border-color: #4a9eff;
+}
+
+.chart-symbol-select option {
+  background: #2a2b2e;
+  color: #e8e8e8;
+}
+
 .price-badge {
   font-size: 20px;
   font-weight: 700;
@@ -436,9 +461,17 @@ body {
 
 .tv-chart-root,
 .price-chart-canvas {
-  width: 100%;
   flex: 1;
   min-height: 0;
+}
+
+.tv-chart-root {
+  width: 100%;
+}
+
+.price-chart-canvas {
+  width: 90%;
+  margin: 0 auto;
 }
 
 /* チャートサイドバー */
@@ -616,6 +649,10 @@ body {
   font-weight: 600;
 }
 
+.trading-panel .form-group {
+  margin: 0 16px 16px;
+}
+
 .order-type-toggle {
   display: flex;
   gap: 0;
@@ -656,7 +693,7 @@ body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
-  margin-bottom: 16px;
+  margin: 0 16px 16px;
 }
 
 .quick-btn {
@@ -676,7 +713,7 @@ body {
 }
 
 .order-summary {
-  margin: 16px 0;
+  margin: 0 16px 16px;
   padding: 12px;
   background: #1a1b1e;
   border-radius: 4px;
@@ -692,7 +729,7 @@ body {
 }
 
 .order-btn {
-  width: 100%;
+  width: calc(100% - 32px);
   padding: 14px;
   border: none;
   border-radius: 4px;
@@ -700,7 +737,7 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  margin-bottom: 16px;
+  margin: 0 16px 16px;
 }
 
 .order-btn.buy {
@@ -733,7 +770,7 @@ body {
   margin: 16px;
 }
 
-.mode-btn {
+.order-mode-toggle .mode-btn {
   flex: 1;
   padding: 10px;
   background: #1a1b1e;
@@ -746,13 +783,13 @@ body {
   transition: all 0.2s;
 }
 
-.mode-btn.active {
+.order-mode-toggle .mode-btn.active {
   background: #4a9eff;
   color: white;
   border-color: #4a9eff;
 }
 
-.mode-btn:hover:not(.active) {
+.order-mode-toggle .mode-btn:hover:not(.active) {
   background: #2a2b2e;
   color: #e8e8e8;
 }

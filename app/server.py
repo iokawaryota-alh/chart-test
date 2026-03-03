@@ -7,12 +7,22 @@ import json
 import os
 import hashlib
 from functools import wraps
+from urllib import request as urllib_request
+from urllib import parse as urllib_parse
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
 # データファイルパス
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+SYMBOL_ASSET_MAP = {
+    'BTCUSDT': {'asset': 'BTC', 'pair': 'BTC/JPY', 'fallback_price': 15000000},
+    'ETHUSDT': {'asset': 'ETH', 'pair': 'ETH/JPY', 'fallback_price': 500000},
+    'XRPUSDT': {'asset': 'XRP', 'pair': 'XRP/JPY', 'fallback_price': 90},
+    'SOLUSDT': {'asset': 'SOL', 'pair': 'SOL/JPY', 'fallback_price': 15000},
+    'USDCUSDT': {'asset': 'USDC', 'pair': 'USDC/JPY', 'fallback_price': 150},
+}
+
 SETTINGS_FILE = os.path.join(DATA_DIR, 'settings.json')
 BALANCE_FILE = os.path.join(DATA_DIR, 'balance.json')
 ORDERS_FILE = os.path.join(DATA_DIR, 'orders.json')
@@ -57,7 +67,35 @@ def load_settings():
     })
 
 def load_balance():
-    return read_json(BALANCE_FILE, {'BTC': 1.5, 'ETH': 10.0, 'JPY': 5000000})
+    balance = read_json(BALANCE_FILE, {'BTC': 1.5, 'ETH': 10.0, 'XRP': 0, 'SOL': 0, 'USDC': 0, 'JPY': 5000000})
+    for asset in ['BTC', 'ETH', 'XRP', 'SOL', 'USDC', 'JPY']:
+        if asset not in balance:
+            balance[asset] = 0
+    return balance
+
+
+def fetch_symbol_price_jpy(symbol, settings_data):
+    symbol_meta = SYMBOL_ASSET_MAP.get(symbol, SYMBOL_ASSET_MAP['BTCUSDT'])
+    fallback_price = symbol_meta['fallback_price']
+    usdjpy_rate = settings_data.get('usdjpy_rate', 150)
+
+    try:
+        query = urllib_parse.urlencode({
+            'category': 'spot',
+            'symbol': symbol,
+        })
+        url = f"https://api.bybit.com/v5/market/tickers?{query}"
+
+        with urllib_request.urlopen(url, timeout=3) as response:
+            data = json.loads(response.read().decode('utf-8'))
+
+        if data.get('retCode') == 0 and data.get('result', {}).get('list'):
+            last_price_usd = float(data['result']['list'][0]['lastPrice'])
+            return round(last_price_usd * usdjpy_rate)
+    except Exception as e:
+        print(f"Failed to fetch symbol price for {symbol}: {e}")
+
+    return fallback_price
 
 def load_orders():
     return read_json(ORDERS_FILE, [])
@@ -354,10 +392,13 @@ def withdraw():
 # API: 現在価格取得（モック）
 @app.route('/api/current-price', methods=['GET'])
 def get_current_price():
-    # 実際にはBybit APIから取得すべきだが、モックで返す
+    symbol = request.args.get('symbol', 'BTCUSDT')
+    symbol_meta = SYMBOL_ASSET_MAP.get(symbol, SYMBOL_ASSET_MAP['BTCUSDT'])
+    current_price = fetch_symbol_price_jpy(symbol, settings)
+
     return jsonify({
-        'symbol': 'BTC/JPY',
-        'price': CURRENT_BTC_PRICE,
+        'symbol': symbol_meta['pair'],
+        'price': current_price,
         'timestamp': int(time.time() * 1000)
     })
 
@@ -371,8 +412,16 @@ def create_order():
     
     order_side = data.get('side')  # 'buy' or 'sell'
     order_type = data.get('type')  # 'market' or 'limit'
+    symbol = data.get('symbol', 'BTCUSDT')
     amount = data.get('amount')
     price = data.get('price')  # 指値の場合のみ
+
+    symbol_meta = SYMBOL_ASSET_MAP.get(symbol)
+    if not symbol_meta:
+        return jsonify({'error': '未対応の銘柄です'}), 400
+
+    base_asset = symbol_meta['asset']
+    pair_label = symbol_meta['pair']
     
     # バリデーション
     if order_side not in ['buy', 'sell']:
@@ -397,7 +446,9 @@ def create_order():
     MIN_ORDER_AMOUNT = settings.get('min_order_amount', 0.0001)
     
     if amount_float < MIN_ORDER_AMOUNT:
-        return jsonify({'error': f'最小注文数量は {MIN_ORDER_AMOUNT} BTC です'}), 400
+        return jsonify({'error': f'最小注文数量は {MIN_ORDER_AMOUNT} {base_asset} です'}), 400
+
+    market_price = fetch_symbol_price_jpy(symbol, settings)
     
     # 指値注文の場合は価格チェック
     if order_type == 'limit':
@@ -414,8 +465,8 @@ def create_order():
         
         # 価格範囲チェック
         price_limit = settings.get('price_limit_percent', 10) / 100
-        min_price = CURRENT_BTC_PRICE * (1 - price_limit)
-        max_price = CURRENT_BTC_PRICE * (1 + price_limit)
+        min_price = market_price * (1 - price_limit)
+        max_price = market_price * (1 + price_limit)
         
         if price_float < min_price or price_float > max_price:
             return jsonify({'error': f'価格は現在価格の±{settings.get("price_limit_percent", 10)}%以内（{int(min_price):,}円〜{int(max_price):,}円）で指定してください'}), 400
@@ -423,7 +474,7 @@ def create_order():
         execution_price = price_float
     else:
         # 成行注文の場合は現在価格で約定
-        execution_price = CURRENT_BTC_PRICE
+        execution_price = market_price
     
     # 残高取得
     balance = load_balance()
@@ -439,9 +490,10 @@ def create_order():
         if total_required > balance['JPY']:
             return jsonify({'error': f'JPY残高が不足しています（必要: {int(total_required):,}円、残高: {int(balance["JPY"]):,}円）'}), 400
     else:
-        # 売り注文：BTC残高が必要
-        if amount_float > balance['BTC']:
-            return jsonify({'error': f'BTC残高が不足しています（必要: {amount_float}BTC、残高: {balance["BTC"]}BTC）'}), 400
+        # 売り注文：ベース資産残高が必要
+        available_asset = balance.get(base_asset, 0)
+        if amount_float > available_asset:
+            return jsonify({'error': f'{base_asset}残高が不足しています（必要: {amount_float}{base_asset}、残高: {available_asset}{base_asset}）'}), 400
     
     # 注文作成
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -452,7 +504,8 @@ def create_order():
         'id': order_id,
         'side': order_side,
         'type': order_type,
-        'pair': 'BTC/JPY',
+        'symbol': symbol,
+        'pair': pair_label,
         'amount': amount_float,
         'price': execution_price,
         'total': execution_price * amount_float,
@@ -469,9 +522,9 @@ def create_order():
     if order_type == 'market':
         if order_side == 'buy':
             balance['JPY'] -= (new_order['total'] + new_order['fee'])
-            balance['BTC'] += amount_float
+            balance[base_asset] = balance.get(base_asset, 0) + amount_float
         else:
-            balance['BTC'] -= amount_float
+            balance[base_asset] = balance.get(base_asset, 0) - amount_float
             balance['JPY'] += (new_order['total'] - new_order['fee'])
         
         write_json(BALANCE_FILE, balance)

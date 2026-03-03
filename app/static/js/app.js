@@ -5,12 +5,66 @@ const BYBIT_WS = "wss://stream.bybit.com/v5/public/linear";
 const BYBIT_API = "https://api.bybit.com/v5/market";
 const USDJPY_RATE = 150; // 簡易的なUSD/JPY換算レート
 
+const SYMBOL_CONFIG = {
+  BTCUSDT: {
+    label: "BTC/JPY",
+    asset: "BTC",
+    orderBookStep: 500,
+    orderBookBaseAmount: 0.03,
+    fallbackPriceJpy: 15000000,
+  },
+  ETHUSDT: {
+    label: "ETH/JPY",
+    asset: "ETH",
+    orderBookStep: 50,
+    orderBookBaseAmount: 0.5,
+    fallbackPriceJpy: 500000,
+  },
+  XRPUSDT: {
+    label: "XRP/JPY",
+    asset: "XRP",
+    orderBookStep: 0.2,
+    orderBookBaseAmount: 120,
+    fallbackPriceJpy: 90,
+  },
+  SOLUSDT: {
+    label: "SOL/JPY",
+    asset: "SOL",
+    orderBookStep: 10,
+    orderBookBaseAmount: 1.8,
+    fallbackPriceJpy: 15000,
+  },
+  USDCUSDT: {
+    label: "USDC/JPY",
+    asset: "USDC",
+    orderBookStep: 0.1,
+    orderBookBaseAmount: 200,
+    fallbackPriceJpy: 150,
+  },
+};
+
+const SYMBOL_OPTIONS = Object.entries(SYMBOL_CONFIG).map(([value, meta]) => ({
+  value,
+  label: meta.label,
+  asset: meta.asset,
+}));
+
+function getSymbolMeta(symbol) {
+  const fallback = SYMBOL_OPTIONS[0];
+  const option = SYMBOL_OPTIONS.find((candidate) => candidate.value === symbol);
+  const resolved = option || fallback;
+  return {
+    ...resolved,
+    ...SYMBOL_CONFIG[resolved.value],
+  };
+}
+
 // Bybit REST APIから過去のKlineデータを取得
-async function fetchBybitKlineData(interval, limit = 200) {
+async function fetchBybitKlineData(symbol, interval, limit = 200) {
   try {
     const endTime = Date.now();
     const response = await fetch(
-      `${BYBIT_API}/kline?category=linear&symbol=BTCUSDT&interval=${interval}&limit=${limit}&end=${endTime}`,
+      `${BYBIT_API}/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${limit}&end=${endTime}`,
     );
     const data = await response.json();
 
@@ -61,9 +115,7 @@ function SideMenu({ activeMenu, setActiveMenu }) {
 
   return (
     <div className="side-menu">
-      <div className="side-menu-header">
-        <div className="logo">💰 Crypto</div>
-      </div>
+      <div className="side-menu-header"></div>
       {menuItems.map((item) => (
         <div
           key={item.id}
@@ -100,27 +152,43 @@ function PriceTicker() {
 }
 
 // オーダーブック風コンポーネント
-function OrderBook() {
-  const sellOrders = [
-    { price: 15240000, amount: 0.5234, total: 7978896 },
-    { price: 15239000, amount: 0.3421, total: 5213311 },
-    { price: 15238000, amount: 0.8932, total: 13610552 },
-    { price: 15237000, amount: 0.2156, total: 3285107 },
-    { price: 15236000, amount: 0.6745, total: 10276682 },
-  ];
+function OrderBook({ selectedSymbol, currentPrice }) {
+  const symbolMeta = getSymbolMeta(selectedSymbol);
+  const step = symbolMeta.orderBookStep;
+  const baseAmount = symbolMeta.orderBookBaseAmount;
+  const centerPrice =
+    currentPrice && currentPrice > 0
+      ? currentPrice
+      : symbolMeta.fallbackPriceJpy;
 
-  const buyOrders = [
-    { price: 15235000, amount: 0.4523, total: 6891773 },
-    { price: 15234000, amount: 0.7234, total: 11022244 },
-    { price: 15233000, amount: 0.3421, total: 5211259 },
-    { price: 15232000, amount: 0.9123, total: 13899204 },
-    { price: 15231000, amount: 0.2341, total: 3565607 },
-  ];
+  const roundPrice = (price) => {
+    if (centerPrice >= 10000) {
+      return Math.round(price);
+    }
+    if (centerPrice >= 100) {
+      return Math.round(price * 10) / 10;
+    }
+    return Math.round(price * 100) / 100;
+  };
+
+  const sellOrders = Array.from({ length: 5 }, (_, index) => {
+    const level = 5 - index;
+    const price = roundPrice(centerPrice + step * level);
+    const amount = Number((baseAmount * (1 + index * 0.25)).toFixed(4));
+    return { price, amount, total: price * amount };
+  });
+
+  const buyOrders = Array.from({ length: 5 }, (_, index) => {
+    const level = index + 1;
+    const price = roundPrice(centerPrice - step * level);
+    const amount = Number((baseAmount * (1 + (4 - index) * 0.25)).toFixed(4));
+    return { price, amount, total: price * amount };
+  });
 
   return (
     <div className="orderbook">
       <div className="orderbook-header">
-        <h3>オーダーブック</h3>
+        <h3>オーダーブック ({symbolMeta.label})</h3>
       </div>
       <div className="orderbook-content">
         <div className="orders sell-orders">
@@ -183,7 +251,12 @@ function RecentTrades() {
 }
 
 // チャートコンポーネント - Bybit WebSocketとREST APIを使用
-function PriceChart({ interval, chartType = "candle" }) {
+function PriceChart({
+  interval,
+  chartType = "candle",
+  selectedSymbol,
+  onSymbolChange,
+}) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
   const wsRef = useRef(null);
@@ -191,6 +264,7 @@ function PriceChart({ interval, chartType = "candle" }) {
   const [currentPrice, setCurrentPrice] = useState(null);
   const [priceChange, setPriceChange] = useState(null);
   const [wsStatus, setWsStatus] = useState("disconnected");
+  const symbolMeta = getSymbolMeta(selectedSymbol);
 
   // 過去データを読み込み
   useEffect(() => {
@@ -198,7 +272,7 @@ function PriceChart({ interval, chartType = "candle" }) {
 
     const loadHistoricalData = async () => {
       const bybitInterval = getBybitInterval(interval);
-      const data = await fetchBybitKlineData(bybitInterval);
+      const data = await fetchBybitKlineData(selectedSymbol, bybitInterval);
 
       if (mounted && data.length > 0) {
         setKlineData(data);
@@ -220,7 +294,7 @@ function PriceChart({ interval, chartType = "candle" }) {
     return () => {
       mounted = false;
     };
-  }, [interval]);
+  }, [interval, selectedSymbol]);
 
   // WebSocket接続でリアルタイム更新
   useEffect(() => {
@@ -243,7 +317,7 @@ function PriceChart({ interval, chartType = "candle" }) {
           const bybitInterval = getBybitInterval(interval);
           const subscribeMsg = {
             op: "subscribe",
-            args: [`kline.${bybitInterval}.BTCUSDT`],
+            args: [`kline.${bybitInterval}.${selectedSymbol}`],
           };
           ws.send(JSON.stringify(subscribeMsg));
         };
@@ -333,7 +407,7 @@ function PriceChart({ interval, chartType = "candle" }) {
       }
       wsRef.current = null;
     };
-  }, [interval]);
+  }, [interval, selectedSymbol]);
 
   // Chart.jsでチャートを描画
   useEffect(() => {
@@ -351,7 +425,7 @@ function PriceChart({ interval, chartType = "candle" }) {
         data: {
           datasets: [
             {
-              label: "BTC/JPY",
+              label: symbolMeta.label,
               data: klineData.map((k) => ({
                 x: k.time,
                 o: k.open,
@@ -420,7 +494,7 @@ function PriceChart({ interval, chartType = "candle" }) {
           labels: klineData.map((k) => k.time),
           datasets: [
             {
-              label: "BTC/JPY",
+              label: symbolMeta.label,
               data: klineData.map((k) => k.close),
               borderColor: "#4a9eff",
               backgroundColor: "rgba(74, 158, 255, 0.1)",
@@ -484,7 +558,18 @@ function PriceChart({ interval, chartType = "candle" }) {
     <div className="chart-section-full">
       <div className="chart-header">
         <div className="chart-title">
-          <span className="currency-pair">BTC/JPY</span>
+          <span className="currency-pair">{symbolMeta.label}</span>
+          <select
+            className="chart-symbol-select"
+            value={selectedSymbol}
+            onChange={(e) => onSymbolChange && onSymbolChange(e.target.value)}
+          >
+            {SYMBOL_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <span
             className={`ws-status ${wsStatus}`}
             title={`WebSocket: ${wsStatus}`}
@@ -518,7 +603,7 @@ function PriceChart({ interval, chartType = "candle" }) {
 }
 
 // 注文パネルコンポーネント
-function TradingPanel({ balance, onOrderCreated }) {
+function TradingPanel({ balance, onOrderCreated, selectedSymbol }) {
   const [orderSide, setOrderSide] = useState("buy"); // 'buy' or 'sell'
   const [orderType, setOrderType] = useState("market"); // 'market' or 'limit'
   const [amount, setAmount] = useState("");
@@ -527,16 +612,32 @@ function TradingPanel({ balance, onOrderCreated }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const symbolMeta = getSymbolMeta(selectedSymbol);
+
+  useEffect(() => {
+    setAmount("");
+    setPrice("");
+    setError("");
+    setSuccess("");
+  }, [selectedSymbol]);
 
   // 現在価格を取得
   useEffect(() => {
     const fetchCurrentPrice = async () => {
       try {
-        const response = await fetch(`${API_BASE}/current-price`);
+        const response = await fetch(
+          `${BYBIT_API}/tickers?category=linear&symbol=${selectedSymbol}`,
+        );
         const data = await response.json();
-        setCurrentPrice(data.price);
-        if (orderType === "limit" && !price) {
-          setPrice(data.price.toString());
+
+        if (data.retCode === 0 && data.result.list.length > 0) {
+          const symbolUsd = parseFloat(data.result.list[0].lastPrice);
+          const symbolJpy = Math.round(symbolUsd * USDJPY_RATE);
+          setCurrentPrice(symbolJpy);
+
+          if (orderType === "limit" && !price) {
+            setPrice(symbolJpy.toString());
+          }
         }
       } catch (error) {
         console.error("Failed to fetch current price:", error);
@@ -547,7 +648,7 @@ function TradingPanel({ balance, onOrderCreated }) {
     const interval = setInterval(fetchCurrentPrice, 10000); // 10秒ごとに更新
 
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedSymbol]);
 
   // Quick amount計算
   const calculateQuickAmount = (percentage) => {
@@ -555,9 +656,10 @@ function TradingPanel({ balance, onOrderCreated }) {
       const availableJpy = balance.JPY * (percentage / 100);
       const btcAmount = (availableJpy / currentPrice) * 0.999; // 手数料考慮
       setAmount(btcAmount.toFixed(8));
-    } else if (orderSide === "sell" && balance.BTC) {
-      const btcAmount = balance.BTC * (percentage / 100);
-      setAmount(btcAmount.toFixed(8));
+    } else if (orderSide === "sell") {
+      const assetBalance = balance[symbolMeta.asset] || 0;
+      const sellAmount = assetBalance * (percentage / 100);
+      setAmount(sellAmount.toFixed(8));
     }
   };
 
@@ -569,6 +671,7 @@ function TradingPanel({ balance, onOrderCreated }) {
 
     try {
       const orderData = {
+        symbol: selectedSymbol,
         side: orderSide,
         type: orderType,
         amount: amount,
@@ -649,34 +752,29 @@ function TradingPanel({ balance, onOrderCreated }) {
       </div>
 
       {/* 成行・指値切替 */}
-      <div className="order-mode-toggle">
-        <button
-          className={`mode-btn ${orderType === "market" ? "active" : ""}`}
-          onClick={() => {
-            setOrderType("market");
-            setError("");
-          }}
-        >
-          成行
-        </button>
-        <button
-          className={`mode-btn ${orderType === "limit" ? "active" : ""}`}
-          onClick={() => {
-            setOrderType("limit");
-            if (!price && currentPrice) {
+      <div className="form-group">
+        <label className="form-label">注文タイプ</label>
+        <select
+          className="form-input"
+          value={orderType}
+          onChange={(e) => {
+            const nextType = e.target.value;
+            setOrderType(nextType);
+            if (nextType === "limit" && !price && currentPrice) {
               setPrice(currentPrice.toString());
             }
             setError("");
           }}
         >
-          指値
-        </button>
+          <option value="market">成行</option>
+          <option value="limit">指値</option>
+        </select>
       </div>
 
       {/* 現在価格表示 */}
       {currentPrice && (
         <div className="current-price-display">
-          <span className="label">現在価格:</span>
+          <span className="label">現在価格 ({symbolMeta.label}):</span>
           <span className="value">{currentPrice.toLocaleString()} JPY</span>
         </div>
       )}
@@ -698,7 +796,7 @@ function TradingPanel({ balance, onOrderCreated }) {
 
       {/* 数量入力 */}
       <div className="form-group">
-        <label className="form-label">数量 (BTC)</label>
+        <label className="form-label">数量 ({symbolMeta.asset})</label>
         <input
           type="text"
           className="form-input"
@@ -706,7 +804,7 @@ function TradingPanel({ balance, onOrderCreated }) {
           onChange={(e) => setAmount(e.target.value)}
           placeholder="0.00000000"
         />
-        <div className="input-hint">最小: 0.0001 BTC</div>
+        <div className="input-hint">最小: 0.0001 {symbolMeta.asset}</div>
       </div>
 
       {/* Quick amountボタン */}
@@ -773,16 +871,29 @@ function TradingPanel({ balance, onOrderCreated }) {
 
 function App() {
   const [activeMenu, setActiveMenu] = useState("chart");
-  const [balance, setBalance] = useState({ BTC: 1.5, ETH: 10.0, JPY: 5000000 });
+  const [balance, setBalance] = useState({
+    BTC: 1.5,
+    ETH: 10.0,
+    XRP: 0,
+    SOL: 0,
+    USDC: 0,
+    JPY: 5000000,
+  });
   const [deposits, setDeposits] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
   const [orders, setOrders] = useState([]);
   const [chartInterval, setChartInterval] = useState("60");
   const [chartType, setChartType] = useState("candle");
+  const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
   const [tradeMode, setTradeMode] = useState("spot"); // 'spot' or 'leverage'
   const [leverageRatio, setLeverageRatio] = useState(10); // 2, 5, 10
-  const [currentBtcPrice, setCurrentBtcPrice] = useState(15000000); // BTC/JPYレート
-  const [currentEthPrice, setCurrentEthPrice] = useState(500000); // ETH/JPYレート（仮）
+  const [assetPrices, setAssetPrices] = useState({
+    BTC: 15000000,
+    ETH: 500000,
+    XRP: 90,
+    SOL: 15000,
+    USDC: 150,
+  });
 
   useEffect(() => {
     fetchBalance();
@@ -797,22 +908,26 @@ function App() {
   }, []);
 
   const fetchCurrentPrices = async () => {
-    try {
-      // Bybit APIからBTC/USDTの価格を取得
-      const response = await fetch(
-        "https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT",
-      );
-      const data = await response.json();
+    const nextPrices = { ...assetPrices };
+    const symbols = SYMBOL_OPTIONS.filter((option) => option.asset !== "USDC");
 
-      if (data.retCode === 0 && data.result.list.length > 0) {
-        const btcUsd = parseFloat(data.result.list[0].lastPrice);
-        // USD/JPYレートを150円と仮定
-        const btcJpy = Math.round(btcUsd * 150);
-        setCurrentBtcPrice(btcJpy);
+    try {
+      for (const symbol of symbols) {
+        const response = await fetch(
+          `${BYBIT_API}/tickers?category=spot&symbol=${symbol.value}`,
+        );
+        const data = await response.json();
+
+        if (data.retCode === 0 && data.result.list.length > 0) {
+          const priceUsd = parseFloat(data.result.list[0].lastPrice);
+          nextPrices[symbol.asset] = Math.round(priceUsd * USDJPY_RATE);
+        }
       }
+
+      nextPrices.USDC = USDJPY_RATE;
+      setAssetPrices(nextPrices);
     } catch (error) {
       console.error("Failed to fetch current prices:", error);
-      // エラー時はデフォルト値を維持
     }
   };
 
@@ -875,10 +990,13 @@ function App() {
     }
   };
 
-  const btcJpy = (balance.BTC || 0) * currentBtcPrice;
-  const ethJpy = (balance.ETH || 0) * currentEthPrice;
+  const btcJpy = (balance.BTC || 0) * assetPrices.BTC;
+  const ethJpy = (balance.ETH || 0) * assetPrices.ETH;
+  const xrpJpy = (balance.XRP || 0) * assetPrices.XRP;
+  const solJpy = (balance.SOL || 0) * assetPrices.SOL;
+  const usdcJpy = (balance.USDC || 0) * assetPrices.USDC;
   const jpyBalance = balance.JPY || 0;
-  const totalJpy = jpyBalance + btcJpy + ethJpy;
+  const totalJpy = jpyBalance + btcJpy + ethJpy + xrpJpy + solJpy + usdcJpy;
 
   // レバレッジポジションの簡易計算（将来的に実装）
   const leveragePositions = orders.filter(
@@ -911,11 +1029,17 @@ function App() {
     JPY: "#26a69a",
     BTC: "#f7931a",
     ETH: "#627eea",
+    XRP: "#00bcd4",
+    SOL: "#ab47bc",
+    USDC: "#2775ca",
   };
 
   const donutAssets = [
     { currency: "BTC", value: btcJpy, color: assetColors.BTC },
     { currency: "ETH", value: ethJpy, color: assetColors.ETH },
+    { currency: "XRP", value: xrpJpy, color: assetColors.XRP },
+    { currency: "SOL", value: solJpy, color: assetColors.SOL },
+    { currency: "USDC", value: usdcJpy, color: assetColors.USDC },
   ].filter((asset) => asset.value > 0);
 
   const donutGradient =
@@ -936,8 +1060,8 @@ function App() {
     {
       currency: "JPY",
       amountRaw: 0,
-      balanceText: "0",
-      convertedText: "¥ 0",
+      balanceText: (balance.JPY || 0).toLocaleString("ja-JP"),
+      convertedText: `¥ ${(balance.JPY || 0).toLocaleString("ja-JP")}`,
       color: assetColors.JPY,
     },
     {
@@ -954,9 +1078,32 @@ function App() {
       convertedText: `¥ ${ethJpy.toLocaleString("ja-JP")}`,
       color: assetColors.ETH,
     },
-  ].filter((row) => row.currency === "JPY" || row.amountRaw > 0);
+    {
+      currency: "XRP",
+      amountRaw: balance.XRP || 0,
+      balanceText: (balance.XRP || 0).toFixed(4),
+      convertedText: `¥ ${xrpJpy.toLocaleString("ja-JP")}`,
+      color: assetColors.XRP,
+    },
+    {
+      currency: "SOL",
+      amountRaw: balance.SOL || 0,
+      balanceText: (balance.SOL || 0).toFixed(4),
+      convertedText: `¥ ${solJpy.toLocaleString("ja-JP")}`,
+      color: assetColors.SOL,
+    },
+    {
+      currency: "USDC",
+      amountRaw: balance.USDC || 0,
+      balanceText: (balance.USDC || 0).toFixed(4),
+      convertedText: `¥ ${usdcJpy.toLocaleString("ja-JP")}`,
+      color: assetColors.USDC,
+    },
+  ];
 
   const fetchedAt = new Date().toLocaleString("ja-JP");
+  const selectedSymbolMeta = getSymbolMeta(selectedSymbol);
+  const selectedSymbolPrice = assetPrices[selectedSymbolMeta.asset] || 0;
 
   return (
     <div className="app-container-new">
@@ -996,7 +1143,7 @@ function App() {
           <div className="info-item">
             <span className="info-label">証拠金維持率</span>
             <span className={`info-value ${marginRatio ? "positive" : ""}`}>
-              {marginRatio ? `${marginRatio}%` : "N/A"}
+              {marginRatio ? `${marginRatio}%` : "-"}
             </span>
           </div>
           <div className="info-item">
@@ -1071,10 +1218,18 @@ function App() {
                     </button>
                   </div>
                 </div>
-                <PriceChart interval={chartInterval} chartType={chartType} />
+                <PriceChart
+                  interval={chartInterval}
+                  chartType={chartType}
+                  selectedSymbol={selectedSymbol}
+                  onSymbolChange={setSelectedSymbol}
+                />
               </div>
               <div className="chart-sidebar">
-                <OrderBook />
+                <OrderBook
+                  selectedSymbol={selectedSymbol}
+                  currentPrice={selectedSymbolPrice}
+                />
                 <RecentTrades />
               </div>
             </div>
@@ -1083,11 +1238,17 @@ function App() {
           {activeMenu === "trade" && (
             <div className="trade-view">
               <div className="trade-main">
-                <PriceChart interval={chartInterval} chartType={chartType} />
+                <PriceChart
+                  interval={chartInterval}
+                  chartType={chartType}
+                  selectedSymbol={selectedSymbol}
+                  onSymbolChange={setSelectedSymbol}
+                />
               </div>
               <TradingPanel
                 balance={balance}
                 onOrderCreated={handleOrderCreated}
+                selectedSymbol={selectedSymbol}
               />
             </div>
           )}

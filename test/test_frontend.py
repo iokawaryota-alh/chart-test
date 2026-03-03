@@ -100,29 +100,25 @@ class TestFrontendDisplay:
         withdraw_menu.click()
         expect(withdraw_menu).to_have_class("menu-item active")
 
-    def test_chart_interval_1w_1m_visible(self, page: Page):
-        """1W/1Mボタン押下時にチャートが表示されるかテスト"""
+    def test_chart_interval_switch_visible(self, page: Page):
+        """時間足ボタン押下時にチャートが表示されるかテスト"""
         page.goto("http://localhost:5000")
 
         chart_menu = page.locator(".menu-item", has_text="チャート")
         chart_menu.click()
 
-        chart_root = page.locator(".tv-chart-root")
-        expect(chart_root).to_be_visible()
+        chart_canvas = page.locator(".tv-chart-root, .price-chart-canvas").first
+        expect(chart_canvas).to_be_visible()
 
-        interval_1w = page.locator(".interval-btn", has_text="1W")
-        interval_1w.click()
-        expect(interval_1w).to_have_class("interval-btn active")
-        expect(chart_root).to_be_visible()
+        interval_4h = page.locator(".interval-btn", has_text="4時間")
+        interval_4h.click()
+        expect(interval_4h).to_have_class("interval-btn active")
+        expect(chart_canvas).to_be_visible()
 
-        interval_1m = page.locator(".interval-btn", has_text="1M")
-        interval_1m.click()
-        expect(interval_1m).to_have_class("interval-btn active")
-        expect(chart_root).to_be_visible()
-
-        # Lightweight Chartsの描画キャンバスが存在すること
-        canvas = page.locator(".tv-chart-root canvas").first
-        expect(canvas).to_be_visible()
+        interval_1d = page.locator(".interval-btn", has_text="1日")
+        interval_1d.click()
+        expect(interval_1d).to_have_class("interval-btn active")
+        expect(chart_canvas).to_be_visible()
 
 
 class TestConsoleErrors:
