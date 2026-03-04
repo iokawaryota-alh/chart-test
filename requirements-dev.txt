@@ -1,0 +1,6 @@
+-r requirements.txt
+
+# テスト用の依存パッケージ
+pytest==7.4.3
+pytest-playwright==0.4.3
+playwright==1.40.0

@@ -15,8 +15,8 @@ if errorlevel 1 (
 )
 
 echo.
-echo Flaskをインストールしています...
-pip install flask flask-cors
+echo 依存パッケージをインストールしています...
+pip install -r requirements.txt
 
 if errorlevel 1 (
     echo エラー: Flaskのインストールに失敗しました。

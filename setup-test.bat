@@ -8,7 +8,7 @@ echo.
 cd /d "%~dp0"
 
 echo Pythonパッケージをインストールしています...
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 echo.
 echo Playwrightブラウザをインストールしています...

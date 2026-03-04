@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Flask demo app on Lambda with minimal IAM permissions for S3 JSON access
+
+Parameters:
+  DataBucketName:
+    Type: String
+    Description: S3 bucket name for JSON persistence
+  DataPrefix:
+    Type: String
+    Default: demo-json/
+    Description: S3 key prefix for JSON files (include trailing slash)
+
+Resources:
+  DemoHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+
+  DemoAppFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.12
+      CodeUri: app/
+      Handler: server.handler
+      Timeout: 15
+      MemorySize: 512
+      Environment:
+        Variables:
+          APP_RUNTIME: lambda
+          DATA_BACKEND: s3
+          S3_BUCKET: !Ref DataBucketName
+          S3_PREFIX: !Ref DataPrefix
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Sid: S3JsonReadWrite
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+              Resource: !Sub arn:${AWS::Partition}:s3:::${DataBucketName}/${DataPrefix}*
+      Events:
+        Root:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DemoHttpApi
+            Path: /
+            Method: ANY
+        Proxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DemoHttpApi
+            Path: /{proxy+}
+            Method: ANY
+
+  ApiGatewayInvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DemoAppFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${DemoHttpApi}/*/*/*
+
+Outputs:
+  HttpApiUrl:
+    Description: HTTP API invoke URL ($default stage)
+    Value: !Sub https://${DemoHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}
+  FunctionName:
+    Description: Lambda function name
+    Value: !Ref DemoAppFunction

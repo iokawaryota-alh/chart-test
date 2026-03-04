@@ -13,6 +13,21 @@ from urllib import parse as urllib_parse
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
+
+def create_lambda_handler(flask_app):
+    try:
+        from asgiref.wsgi import WsgiToAsgi
+        from mangum import Mangum
+    except ImportError:
+        if os.getenv('APP_RUNTIME') == 'lambda':
+            raise
+        return None
+
+    return Mangum(WsgiToAsgi(flask_app))
+
+
+handler = create_lambda_handler(app)
+
 # データファイルパス
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 SYMBOL_ASSET_MAP = {
