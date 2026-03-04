@@ -13,6 +13,8 @@
 - Python 3.12 系
 - Flask 3.0.0
 - flask-cors 4.0.0
+- mangum 0.17.0
+- asgiref 3.8.1
 
 テストを実行する場合は、以下も利用します。
 
@@ -37,11 +39,20 @@ python -m pytest test/ -v
 # 4) バックオフィス用ページのログインパスワード
 admin
 ```
+
 ---
 
 ## 最新ログ（抜粋）
 
+### v2.2.0（2026-03-04）
+
+- AWS SAMテンプレート（`template.yaml`）を追加
+- Lambdaハンドラー（`server.handler`）を実装
+- IAM最小権限を追加（Lambda→S3、API Gateway→Lambda）
+- 依存を `requirements.txt`（本番）/`requirements-dev.txt`（テスト）に分離
+
 ### v2.1.0（2026-03-03）
+
 - 管理者画面（`/admin`）を追加
 - JSONファイルによるデータ永続化を実装
 - レバレッジ取引UI（現物/レバレッジ切替、倍率選択）を追加
@@ -49,6 +60,7 @@ admin
 - トランザクションID形式を統一（`TRX-00001`）
 
 ### v2.0.0（2026-03-02）
+
 - Bybit API統合（WebSocket/REST）
 - 時間足切替とキャンドル表示を実装
 - 成行/指値注文と注文履歴管理を実装

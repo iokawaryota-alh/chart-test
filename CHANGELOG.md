@@ -4,6 +4,36 @@
 
 ---
 
+## [2.2.0] - 2026-03-04
+
+### 🚀 Lambda/SAM対応の基盤整備
+
+このバージョンでは、ローカルFlask運用を維持したまま、
+AWS Lambdaデプロイに向けた最小構成を追加しました。
+
+### ✨ 変更内容
+
+- `template.yaml` を新規追加（AWS SAM）
+  - Lambda関数 (`server.handler`) と HTTP API (`$default`) を定義
+  - Lambda→S3(JSON保存用) の最小権限（`s3:GetObject`, `s3:PutObject`）を定義
+  - API Gateway→Lambda 実行権限（`AWS::Lambda::Permission`）を定義
+- `app/server.py` に Mangum ハンドラーを追加
+  - `server.handler` を実装し、SAMテンプレートのハンドラー名と整合
+  - ローカル実行用 `if __name__ == '__main__': app.run(...)` は維持
+- 依存パッケージを本番用/開発用に分離
+  - `requirements.txt` は runtime 依存のみ（Flask, flask-cors, mangum, asgiref）
+  - `requirements-dev.txt` を新規追加し、pytest / playwright 系を移動
+- セットアップスクリプトを分離後の構成に同期
+  - `setup.bat` は `requirements.txt` を使用
+  - `setup-test.bat` は `requirements-dev.txt` を使用
+
+### 📚 ドキュメント/運用メモ
+
+- `sam build` は SAM CLI 未導入環境では実行不可
+- 事前に SAM CLI をインストールしてからビルドを実行
+
+---
+
 ## [2.1.1] - 2026-03-03
 
 ### 📝 ドキュメント更新（ロードマップ・TODO整理）
