@@ -1,4 +1,4 @@
-﻿const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef } = React;
 
 const API_BASE = "http://localhost:5000/api";
 const BYBIT_WS = "wss://stream.bybit.com/v5/public/linear";
@@ -131,12 +131,12 @@ function SideMenu({ activeMenu, setActiveMenu }) {
 }
 
 // 価格ティッカーコンポーネント
-function PriceTicker() {
-  const [prices, setPrices] = useState([
-    { pair: "BTC/JPY", price: "15,234,567", change: "+2.34%", up: true },
-    { pair: "ETH/JPY", price: "512,345", change: "+1.23%", up: true },
-    { pair: "XRP/JPY", price: "78.45", change: "-0.56%", up: false },
-  ]);
+function PriceTicker({ assetPrices }) {
+  const prices = [
+    { pair: "BTC/JPY", price: (assetPrices?.BTC || 15234567).toLocaleString(), change: "+2.34%", up: true },
+    { pair: "ETH/JPY", price: (assetPrices?.ETH || 512345).toLocaleString(), change: "+1.23%", up: true },
+    { pair: "XRP/JPY", price: (assetPrices?.XRP || 78).toLocaleString(), change: "-0.56%", up: false },
+  ];
 
   return (
     <div className="price-ticker">
@@ -217,14 +217,17 @@ function OrderBook({ selectedSymbol, currentPrice }) {
 }
 
 // 最近の取引コンポーネント
-function RecentTrades() {
+function RecentTrades({ currentPrice }) {
+  const base = currentPrice || 15000000;
+  
+  // currentPrice周辺で適当な取引履歴を生成（デモ用）
   const trades = [
-    { time: "15:23:45", price: 15235000, amount: 0.0234, type: "buy" },
-    { time: "15:23:42", price: 15234500, amount: 0.1523, type: "sell" },
-    { time: "15:23:38", price: 15235500, amount: 0.0892, type: "buy" },
-    { time: "15:23:35", price: 15234000, amount: 0.2341, type: "sell" },
-    { time: "15:23:31", price: 15235200, amount: 0.0456, type: "buy" },
-    { time: "15:23:28", price: 15234800, amount: 0.1234, type: "buy" },
+    { time: "15:23:45", price: base + base * 0.0001, amount: 0.0234, type: "buy" },
+    { time: "15:23:42", price: base - base * 0.0001, amount: 0.1523, type: "sell" },
+    { time: "15:23:38", price: base + base * 0.0002, amount: 0.0892, type: "buy" },
+    { time: "15:23:35", price: base - base * 0.00015, amount: 0.2341, type: "sell" },
+    { time: "15:23:31", price: base + base * 0.00005, amount: 0.0456, type: "buy" },
+    { time: "15:23:28", price: base - base * 0.00005, amount: 0.1234, type: "buy" },
   ];
 
   return (
@@ -241,7 +244,7 @@ function RecentTrades() {
         {trades.map((trade, i) => (
           <div key={i} className={`trade-row ${trade.type}`}>
             <span className="time">{trade.time}</span>
-            <span className="price">{trade.price.toLocaleString()}</span>
+            <span className="price">{Math.round(trade.price).toLocaleString()}</span>
             <span className="amount">{trade.amount.toFixed(4)}</span>
           </div>
         ))}
@@ -603,7 +606,7 @@ function PriceChart({
 }
 
 // 注文パネルコンポーネント
-function TradingPanel({ balance, onOrderCreated, selectedSymbol }) {
+function TradingPanel({ balance, onOrderCreated, selectedSymbol, tradeMode, leverageRatio }) {
   const [orderSide, setOrderSide] = useState("buy"); // 'buy' or 'sell'
   const [orderType, setOrderType] = useState("market"); // 'market' or 'limit'
   const [amount, setAmount] = useState("");
@@ -676,6 +679,8 @@ function TradingPanel({ balance, onOrderCreated, selectedSymbol }) {
         type: orderType,
         amount: amount,
         price: orderType === "limit" ? price : null,
+        trade_type: tradeMode,
+        leverage_ratio: tradeMode === "leverage" ? leverageRatio : 1,
       };
 
       const response = await fetch(`${API_BASE}/orders`, {
@@ -1013,15 +1018,15 @@ function App() {
       ? ((totalJpy / totalMarginUsed) * 100).toFixed(2)
       : null;
 
-  // 約定評価損益の計算（簡易版）
+  // 約定評価損益の計算（現物とレバレッジで正しい計算）
   const realizedPnL = orders
     .filter((order) => order.status === "filled")
     .reduce((sum, order) => {
-      // 簡易的な損益計算（実際は複雑）
+      const currentAssetPrice = assetPrices[getSymbolMeta(order.symbol || "BTCUSDT").asset] || 0;
       if (order.side === "buy") {
-        return sum - (order.total || 0) - (order.fee || 0);
+         return sum + (order.amount * currentAssetPrice) - (order.total + order.fee);
       } else {
-        return sum + (order.total || 0) - (order.fee || 0);
+         return sum + (order.total - order.fee) - (order.amount * currentAssetPrice);
       }
     }, 0);
 
@@ -1174,7 +1179,7 @@ function App() {
         </div>
       </div>
 
-      <PriceTicker />
+      <PriceTicker assetPrices={assetPrices} />
 
       <div className="main-layout">
         <SideMenu activeMenu={activeMenu} setActiveMenu={setActiveMenu} />
@@ -1230,7 +1235,7 @@ function App() {
                   selectedSymbol={selectedSymbol}
                   currentPrice={selectedSymbolPrice}
                 />
-                <RecentTrades />
+                <RecentTrades currentPrice={selectedSymbolPrice} />
               </div>
             </div>
           )}
@@ -1249,6 +1254,8 @@ function App() {
                 balance={balance}
                 onOrderCreated={handleOrderCreated}
                 selectedSymbol={selectedSymbol}
+                tradeMode={tradeMode}
+                leverageRatio={leverageRatio}
               />
             </div>
           )}
