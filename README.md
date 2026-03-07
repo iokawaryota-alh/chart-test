@@ -8,6 +8,19 @@
 
 ---
 
+## ドキュメントの使い分け
+
+- `README.md`:
+  プロジェクト全体とGitHub公開向けの概要（セットアップ、全体方針、ロードマップ）。
+- `app/DEV-README.md`:
+  開発作業向けの注意事項・実装詳細（構成、手順、開発時チェック）。
+- `CHANGELOG.md`:
+  変更履歴のみを時系列で記録（何をいつ変えたか）。
+
+この役割分担に沿って、追記先を選ぶ運用にします。
+
+---
+
 ## 動作環境（最小）
 
 - Python 3.12 系
@@ -101,7 +114,7 @@ admin
 
 ## ドキュメント
 
-- アプリ詳細: [app/README.md](app/README.md)
+- アプリ詳細: [app/DEV-README.md](app/DEV-README.md)
 - 変更履歴: [CHANGELOG.md](CHANGELOG.md)
 - テスト資料:
   - [01_factor-level.md](01_factor-level.md)
@@ -128,7 +141,7 @@ admin
 
 ---
 
-## 中長期ロードマップ（app/READMEと同期）
+## 中長期ロードマップ（app/DEV-READMEと同期）
 
 ### Phase 1: データ永続化
 

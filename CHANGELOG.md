@@ -1,6 +1,7 @@
 # 変更ログ
 
 このプロジェクトの主要な変更履歴を記録します。
+このファイルには、変更履歴（ログ）のみを記載します。
 
 ---
 
@@ -58,12 +59,12 @@ AWS Lambdaデプロイに向けた最小構成を追加しました。
 - ルートREADMEに修正/追加TODOを追加
   - Playwright等を使った自動リグレッション環境の作成
   - エラー想定項目でランダムエラーを発生させるトグル設置
-- `app/README.md` にある Phase 1〜7 の実装計画を、ルートREADMEにも同期
+- `app/DEV-README.md` にある Phase 1〜7 の実装計画を、ルートREADMEにも同期
 
 ### 📚 ドキュメント
 
 - [README.md](README.md)
-- [app/README.md](app/README.md)
+- [app/DEV-README.md](app/DEV-README.md)
 
 ---
 
