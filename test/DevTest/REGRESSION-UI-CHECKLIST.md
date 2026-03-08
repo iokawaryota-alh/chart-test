@@ -104,5 +104,5 @@ docker compose ps
 
 ## 補足
 
-- 自動化済みの基本表示/コンソール確認は `test/README.md` の Playwright テストを利用する
+- 自動化済みの基本表示/コンソール確認は `test/DevTest/README.md` の Playwright テストを利用する
 - 本ファイルは、最近発生したUIクラッシュ系の手動回帰確認に特化している

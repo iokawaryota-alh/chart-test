@@ -159,9 +159,10 @@ Docker が停止している場合は、まず Docker Desktop を起動し、
 
 - アプリ詳細: [app/DEV-README.md](app/DEV-README.md)
 - 変更履歴: [CHANGELOG.md](CHANGELOG.md)
+- 役割定義: [ROLES.md](ROLES.md)
 - 回帰テスト手順:
   - [test/README.md](test/README.md)
-  - [test/REGRESSION-UI-CHECKLIST.md](test/REGRESSION-UI-CHECKLIST.md)
+  - [test/DevTest/REGRESSION-UI-CHECKLIST.md](test/DevTest/REGRESSION-UI-CHECKLIST.md)
 - テスト資料:
   - [01_factor-level.md](01_factor-level.md)
   - [02_pattern-table.md](02_pattern-table.md)
