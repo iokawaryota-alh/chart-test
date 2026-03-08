@@ -52,7 +52,7 @@ pytest test/test_frontend.py::TestConsoleErrors -v
 pytest test/test_frontend.py::TestFrontendDisplay::test_page_loads_successfully -v
 ```
 
-### ヘッドレスモードで実行（ブラウザを表示しない）
+### ブラウザ表示ありで実行（デバッグ向け）
 
 ```powershell
 pytest test/ -v --headed
